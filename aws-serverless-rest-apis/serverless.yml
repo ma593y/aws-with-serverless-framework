@@ -1,4 +1,4 @@
-service: temp-adnan-serverless-rest-apis-${self:custom.txx}
+service: aws-serverless-rest-apis-${self:custom.txx}
 
 frameworkVersion: '3'
 

@@ -1,4 +1,4 @@
-service: temp-adnan-serverless-iot-${self:custom.txx}
+service: aws-serverless-iot-${self:custom.txx}
 
 frameworkVersion: '3'
 
