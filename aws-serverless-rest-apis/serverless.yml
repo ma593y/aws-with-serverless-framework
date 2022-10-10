@@ -1,0 +1,176 @@
+service: temp-adnan-serverless-rest-apis-${self:custom.txx}
+
+frameworkVersion: '3'
+
+useDotenv: true
+
+custom:
+  txx: t01
+  aws_region: ${env:AWS_REGION}
+  aws_account: ${env:AWS_ACCOUNT}
+  users_table_name: ${self:service}-users-table
+
+provider:
+  name: aws
+  stage: dev
+  region: ${self:custom.aws_region}
+  runtime: python3.9
+  memorySize: 256
+  timeout: 29
+  logRetentionInDays: 14
+  architecture: x86_64
+  deploymentMethod: direct
+
+  iam:
+    role:
+      name: ${self:service}-role-lambda
+      statements:
+        # DynamoDB Policies
+        - Effect: 'Allow'
+          Action:
+            - dynamodb:BatchGetItem
+            - dynamodb:BatchWriteItem
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+            - dynamodb:GetItem
+            - dynamodb:Scan
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+          Resource: arn:aws:dynamodb:${self:custom.aws_region}:${self:custom.aws_account}:table/${self:custom.users_table_name}
+        # DynamoDB Stream Policies
+        - Effect: Allow
+          Action:
+            - dynamodb:DescribeStream
+            - dynamodb:GetRecords
+            - dynamodb:GetShardIterator
+          Resource: arn:aws:dynamodb:${self:custom.aws_region}:${self:custom.aws_account}:table/${self:custom.users_table_name}
+        - Effect: Allow
+          Action: dynamodb:ListStreams
+          Resource: '*'
+        # IOT Policies
+        - Effect: Allow
+          Action: iot:Connect
+          Resource: arn:aws:iot:${self:custom.aws_region}:${self:custom.aws_account}:client/*
+        - Effect: Allow
+          Action: iot:Publish
+          Resource: arn:aws:iot:${self:custom.aws_region}:${self:custom.aws_account}:topic/tempAdnanTopic
+
+package:
+  individually: true
+  patterns:
+    - '!**'
+
+functions:
+  
+  get_users:
+    handler: users_handlers/get_users.lambda_handler
+    environment:
+      users_table: ${self:custom.users_table_name}
+    events:
+      - http:
+          path: /users
+          method: get
+          cors: true
+          integration: lambda-proxy
+    package:
+      patterns:
+        - users_handlers/get_users.py
+  
+  post_users:
+    handler: users_handlers/post_users.lambda_handler
+    environment:
+      users_table: ${self:custom.users_table_name}
+    events:
+      - http:
+          path: /users
+          method: post
+          cors: true
+          integration: lambda-proxy
+    package:
+      patterns:
+        - users_handlers/post_users.py
+  
+  get_user:
+    handler: users_handlers/get_user.lambda_handler
+    environment:
+      users_table: ${self:custom.users_table_name}
+    events:
+      - http:
+          path: /users/{id}
+          method: get
+          cors: true
+          integration: lambda-proxy
+    package:
+      patterns:
+        - users_handlers/get_user.py
+  
+  put_user:
+    handler: users_handlers/put_user.lambda_handler
+    environment:
+      users_table: ${self:custom.users_table_name}
+    events:
+      - http:
+          path: /users/{id}
+          method: put
+          cors: true
+          integration: lambda-proxy
+    package:
+      patterns:
+        - users_handlers/put_user.py
+  
+  delete_user:
+    handler: users_handlers/delete_user.lambda_handler
+    environment:
+      users_table: ${self:custom.users_table_name}
+    events:
+      - http:
+          path: /users/{id}
+          method: delete
+          cors: true
+          integration: lambda-proxy
+    package:
+      patterns:
+        - users_handlers/delete_user.py
+  
+  post_users_utils:
+    handler: users_handlers/post_users_utils.lambda_handler
+    environment:
+      users_table: ${self:custom.users_table_name}
+    events:
+      - http:
+          path: /users/utils
+          method: post
+          cors: true
+          integration: lambda-proxy
+    package:
+      patterns:
+        - users_handlers/post_users_utils.py
+  
+  users_table_trigger:
+    handler: dynamodb_triggers/users_table_trigger.lambda_handler
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt usersTable.StreamArn
+          batchSize: 1
+          maximumRetryAttempts: 1
+          startingPosition: LATEST
+    package:
+      patterns:
+        - dynamodb_triggers/users_table_trigger.py
+
+resources:
+  Resources:
+    usersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.users_table_name}
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
