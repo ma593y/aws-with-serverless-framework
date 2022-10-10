@@ -2,6 +2,8 @@ service: temp-adnan-serverless-iot-${self:custom.txx}
 
 frameworkVersion: '3'
 
+useDotenv: true
+
 custom:
   txx: t01
   trxx: tr01
