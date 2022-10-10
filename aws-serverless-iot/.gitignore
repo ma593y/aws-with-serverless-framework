@@ -20,4 +20,4 @@ var/
 .serverless
 
 # Custom
-.env_example
+.env
