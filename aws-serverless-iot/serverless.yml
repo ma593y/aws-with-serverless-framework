@@ -1,0 +1,90 @@
+service: temp-adnan-serverless-iot-${self:custom.txx}
+
+frameworkVersion: '3'
+
+custom:
+  txx: t01
+  trxx: tr01
+  aws_region: ${env:AWS_REGION}
+  aws_account: ${env:AWS_ACCOUNT}
+
+provider:
+  name: aws
+  stage: dev
+  region: ${self:custom.aws_region}
+  runtime: python3.9
+  memorySize: 256
+  timeout: 29
+  logRetentionInDays: 14
+  # architecture: x86_64
+  deploymentMethod: direct
+
+  iam:
+    role:
+      name: ${self:service}-role-lambda-${self:custom.trxx}
+      statements:
+        # IOT Policies
+        - Effect: Allow
+          Action: iot:Connect
+          Resource: arn:aws:iot:${self:custom.aws_region}:${self:custom.aws_account}:client/*
+        - Effect: Allow
+          Action: iot:Publish
+          Resource: arn:aws:iot:${self:custom.aws_region}:${self:custom.aws_account}:topic/tempAdnanTopic
+
+package:
+  individually: true
+  patterns:
+    - '!**'
+
+functions:
+  serverless_topic_handler:
+    handler: serverless_topic_handler.lambda_handler
+    events:
+      - sqs:
+          arn: arn:aws:sqs:${self:custom.aws_region}:${self:custom.aws_account}:${self:service}-queue
+          batchSize: 10
+    package:
+      patterns:
+        - serverless_topic_handler.py
+
+resources:
+  Resources:
+    ServerlessTopicSQSQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-queue
+    
+    ServerlessTopicSQSQueueRole:
+          Type: 'AWS::IAM::Role'
+          Properties:
+            RoleName: ${self:service}-role-sqs-${self:custom.trxx}
+            AssumeRolePolicyDocument: 
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Principal:
+                    Service:
+                      - iot.amazonaws.com
+                  Action:
+                    - 'sts:AssumeRole'
+            Policies:
+              - PolicyName: ${self:service}-policy
+                PolicyDocument:
+                  Version: "2012-10-17"
+                  Statement:
+                    - Effect: Allow
+                      Action: sqs:SendMessage
+                      Resource: arn:aws:sqs:${self:custom.aws_region}:${self:custom.aws_account}:${self:service}-queue
+    
+    ServerlessTopicRule:
+      Type: AWS::IoT::TopicRule
+      DependsOn: ServerlessTopicSQSQueueRole
+      Properties:
+        RuleName: !Join [ '_', !Split ['-', '${self:service}-rule']]
+        TopicRulePayload:
+          Sql: SELECT t.* FROM 'tempAdnanTopic/serverless' AS t
+          AwsIotSqlVersion: "2016-03-23"
+          Actions:
+            - Sqs:
+                QueueUrl: https://sqs.${self:custom.aws_region}.amazonaws.com/${self:custom.aws_account}/${self:service}-queue
+                RoleArn: arn:aws:iam::${self:custom.aws_account}:role/${self:service}-role-sqs-${self:custom.trxx}
