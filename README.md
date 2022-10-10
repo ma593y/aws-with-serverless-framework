@@ -1,1 +1,1 @@
-# aws-with-serverless-framework
+# AWS-With-Serverless-Framework
